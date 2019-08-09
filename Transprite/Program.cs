@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Drawing;
 using System.IO;
 using System.Drawing.Imaging;
+using static System.Console;
 
 namespace Transprite
 {
@@ -13,6 +14,7 @@ namespace Transprite
     {
         static void Main(string[] args)
         {
+            const string ARGFILE = "./Sprite.txt";
             Start:
             string directory = null;
             string output = null;
@@ -21,31 +23,37 @@ namespace Transprite
             {
                 case 0:
 
-                    Dictionary<string, string> prev = File.Exists("./Sprite.txt") ? Load("./Sprite.txt") : null;
+                    Dictionary<string, string> prev = File.Exists(ARGFILE) ? Load(ARGFILE) : null;
                     string default_directory = prev?["Directory"] ?? Directory.GetCurrentDirectory();
 
-                    Console.WriteLine("File input directory?".PadRight(32) + writePrev(default_directory));
-                    directory = Console.ReadLine();
+                    WriteLine("File input directory?".PadRight(32) + writePrev(default_directory));
+                    directory = ReadLine();
                     if (string.IsNullOrWhiteSpace(directory)) {
+                        UsePrevious();
                         directory = default_directory;
                     }
 
-                    string default_output = prev?["Output"] ?? Path.Combine(directory, "Facings.png");
-                    Console.WriteLine("File output?".PadRight(32) + writePrev(default_output));
-                    output = Console.ReadLine();
-                    if(string.IsNullOrWhiteSpace(output))
-                    {
+                    //If we didn't choose the default directory, then we should adjust the suggested output to the chosen directory
+                    string default_output = directory == default_directory ? prev?["Output"] ?? Path.Combine(directory, "Facings.png") : Path.Combine(directory, "Facings.png");
+                    WriteLine("File output?".PadRight(32) + writePrev(default_output));
+                    output = ReadLine();
+                    if(string.IsNullOrWhiteSpace(output)) {
+                        UsePrevious();
                         output = default_output;
                     }
 
                     string default_animationFrames = prev?["Animation Frames"] ?? "1";
-                    Console.WriteLine("Animation frames?".PadRight(32) + writePrev(default_animationFrames));
-                    animationFrames = Console.ReadLine();
-                    if (string.IsNullOrWhiteSpace(animationFrames))
-                    {
+                    WriteLine("Animation frames?".PadRight(32) + writePrev(default_animationFrames));
+                    animationFrames = ReadLine();
+                    if (string.IsNullOrWhiteSpace(animationFrames)) {
+                        UsePrevious();
                         animationFrames = default_animationFrames;
                     }
 
+                    void UsePrevious() {
+                        Console.CursorTop--;
+                        Console.WriteLine("Using previous");
+                    }
                     string writePrev(string s) => string.IsNullOrWhiteSpace(s) ? "" : $"Previous: {s}";
                     break;
                 case 1:
@@ -71,8 +79,8 @@ namespace Transprite
                 { "Output", output },
                 { "Animation Frames", animationFrames }
             };
-            Console.WriteLine(string.Join("\n", arguments.Select(p => $"{p.Key.PadRight(16)}: {p.Value}")));
-            Console.WriteLine();
+            WriteLine(string.Join("\n", arguments.Select(p => $"{p.Key.PadRight(16)}: {p.Value}")));
+            WriteLine();
 
             int animationFramesCount;
             try
@@ -80,8 +88,8 @@ namespace Transprite
                 animationFramesCount = int.Parse(animationFrames);
             } catch
             {
-                Console.WriteLine("Failure: Invalid Animation Frames");
-                Console.WriteLine();
+                WriteLine("Failure: Invalid Animation Frames");
+                WriteLine();
                 goto Start;
             }
             File.Delete(output);
@@ -92,8 +100,8 @@ namespace Transprite
                 files = Directory.GetFiles(directory);
             }
             catch {
-                Console.WriteLine("Failure: Invalid Directory");
-                Console.WriteLine();
+                WriteLine("Failure: Invalid Directory");
+                WriteLine();
                 goto Start;
             };
 
@@ -105,28 +113,32 @@ namespace Transprite
             int columns = animationFramesCount;
 
 
-            var first = Bitmap.FromFile(files.First());
+            var first = new Bitmap(files.First());
             var width = first.Width;
             var height = first.Height;
             Bitmap result = new Bitmap(width * columns, height * rows, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             Graphics g = Graphics.FromImage(result);
 
 
+            bool ignore = false;
             for (int facing = 0; facing < rows; facing++) {
                 for (int frame = 0; frame < columns; frame++)
                 {
                     string file = files[facing + frame * facings];
-                    var f = Bitmap.FromFile(file);
-                    if(f.Width != width || f.Height != height) {
-                        Console.WriteLine($"Failure: {file} dimensions ({f.Width}, {f.Height}) do not match first frame dimensions ({width}, {height})");
-                        Console.WriteLine("Continue? (Y)");
-                        if(Console.ReadKey(true).Key != ConsoleKey.Y)
+                    var f = new Bitmap(file);
+                    if(!ignore && !(f.Width == width && f.Height == height)) {
+                        WriteLine($"Failure: {file} dimensions ({f.Width}, {f.Height}) do not match first frame dimensions ({width}, {height})");
+                        WriteLine("Continue? (Y)");
+                        if (ReadKey(true).Key == ConsoleKey.Y)
+                            ignore = true;
+                        else
                             goto Start;
                     }
                     g.DrawImage(f, frame * width, facing * height);
                     f.Dispose();
+                    WriteLine($"Frame {frame} done");
                 }
-                Console.WriteLine("Facing " + facing + " done");
+                WriteLine($"Facing {facing} done");
             }
             g.Dispose();
             //File.Create(output);
@@ -134,16 +146,16 @@ namespace Transprite
 
             using (MemoryStream memory = new MemoryStream()) {
                 using (FileStream fs = new FileStream(output, FileMode.Create, FileAccess.ReadWrite)) {
-                    result.Save(memory, ImageFormat.Jpeg);
+                    result.Save(memory, ImageFormat.Png);
                     byte[] bytes = memory.ToArray();
                     fs.Write(bytes, 0, bytes.Length);
                 }
             }
-
+            WriteLine($"Sprite done");
             result.Dispose();
 
-            arguments.Save("./Sprite.txt");
-            Console.WriteLine();
+            arguments.Save(ARGFILE);
+            WriteLine();
             goto Start;
         }
         public static Dictionary<string, string> Load(string file)
@@ -154,7 +166,6 @@ namespace Transprite
                 .GroupBy(p => p.Index / 2)
                 .ToDictionary(g => g.First().Value, g => g.Last().Value);
         }
-        
     }
     public static class Helper
     {
