@@ -19,6 +19,7 @@ namespace Transprite
             string directory = null;
             string output = null;
             string animationFrames = null;
+            string supersampling = null;
             switch(args.Length)
             {
                 case 0:
@@ -50,34 +51,48 @@ namespace Transprite
                         animationFrames = default_animationFrames;
                     }
 
+                    string default_supersampling = prev?["Super Sampling"] ?? "1";
+                    WriteLine("Super Sampling Factor?".PadRight(32) + writePrev(default_supersampling));
+                    supersampling = ReadLine();
+                    if (string.IsNullOrWhiteSpace(supersampling)) {
+                        UsePrevious();
+                        supersampling = default_supersampling;
+                    }
+
                     void UsePrevious() {
                         Console.CursorTop--;
                         Console.WriteLine("Using previous");
                     }
                     string writePrev(string s) => string.IsNullOrWhiteSpace(s) ? "" : $"Previous: {s}";
                     break;
-                case 1:
-                    directory = args[0];
-                    break;
-                case 2:
-                    directory = args[0];
-                    output = args[1];
-                    break;
+
+                case 4:
+                    supersampling = args[3];
+                    goto animationFrames;
                 case 3:
-                    directory = args[0];
-                    output = args[1];
+                    animationFrames:
                     animationFrames = args[2];
+                    goto output;
+                case 2:
+                    output:
+                    output = args[1];
+                    goto directory;
+                case 1:
+                    directory:
+                    directory = args[0];
                     break;
             }
 
             directory = directory ?? Directory.GetCurrentDirectory();
             output = output ?? Path.Combine(directory, "Facings.png");
             animationFrames = animationFrames ?? "1";
+            supersampling = supersampling ?? "1";
 
             var arguments = new Dictionary<string, string>{
                 { "Directory", directory },
                 { "Output", output },
-                { "Animation Frames", animationFrames }
+                { "Animation Frames", animationFrames },
+                { "Super Sampling", supersampling }
             };
             WriteLine(string.Join("\n", arguments.Select(p => $"{p.Key.PadRight(16)}: {p.Value}")));
             WriteLine();
@@ -92,19 +107,40 @@ namespace Transprite
                 WriteLine();
                 goto Start;
             }
+
+            int supersamplingFactor;
+            try {
+                supersamplingFactor = int.Parse(supersampling);
+            } catch {
+                WriteLine("Failure: Invalid Super Sampling Factor");
+                WriteLine();
+                goto Start;
+            }
             File.Delete(output);
 
             string[] files;
             try
             {
                 files = Directory.GetFiles(directory);
+                Dictionary<string, int> sort = new Dictionary<string, int>();
+                files = files.Where(f => {
+                    if(int.TryParse(Path.GetFileNameWithoutExtension(f), out int i)) {
+                        sort[f] = i;
+                        return true;
+                    }
+                    return false;
+                }).OrderBy(f => sort[f]).ToArray();
             }
             catch {
                 WriteLine("Failure: Invalid Directory");
                 WriteLine();
                 goto Start;
             };
-
+            if(files.Length == 0) {
+                WriteLine("Failure: No valid files found");
+                WriteLine();
+                goto Start;
+            }
 
             int count = files.Length;
             int facings = count / animationFramesCount;
@@ -116,7 +152,7 @@ namespace Transprite
             var first = new Bitmap(files.First());
             var width = first.Width;
             var height = first.Height;
-            Bitmap result = new Bitmap(width * columns, height * rows, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
+            Bitmap result = new Bitmap(width * columns / supersamplingFactor, height * rows / supersamplingFactor, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             Graphics g = Graphics.FromImage(result);
 
 
@@ -134,9 +170,12 @@ namespace Transprite
                         else
                             goto Start;
                     }
-                    g.DrawImage(f, frame * width, facing * height);
+                    g.DrawImage(f, frame * width / supersamplingFactor, facing * height / supersamplingFactor, width / supersamplingFactor, height / supersamplingFactor);
                     f.Dispose();
-                    WriteLine($"Frame {frame} done");
+                    WriteLine(file);
+                    if(columns > 1) {
+                        WriteLine($"Frame {frame} done");
+                    }
                 }
                 WriteLine($"Facing {facing} done");
             }
