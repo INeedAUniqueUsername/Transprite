@@ -154,6 +154,10 @@ namespace Transprite
             var height = first.Height;
             Bitmap result = new Bitmap(width * columns / supersamplingFactor, height * rows / supersamplingFactor, System.Drawing.Imaging.PixelFormat.Format32bppArgb);
             Graphics g = Graphics.FromImage(result);
+            g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+            //draw the image into the target bitmap
 
 
             bool ignore = false;
